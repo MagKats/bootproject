@@ -1,88 +1,140 @@
-#define BLYNK_TEMPLATE_ID "TMPL5aALXjp2f"
-#define BLYNK_TEMPLATE_NAME "SCHIP CONTROLE"
-#define BLYNK_AUTH_TOKEN "uO-RsP0GDFLPK8S9MKLGdS8HW1Nf4gO1"
+#define BLYNK_TEMPLATE_ID "TMPL5C4B1dg3j"
+#define BLYNK_TEMPLATE_NAME "Boot Project Rev4"
+#define BLYNK_AUTH_TOKEN "5u0JzlNEczJ-npDnxfmGmSe15lzVdBPW"
 
-/*
-#define BLYNK_TEMPLATE_ID "TMPL5LI5Tgxqp"
-#define BLYNK_TEMPLATE_NAME "RPI boot tijdelijk"
-#define BLYNK_AUTH_TOKEN "wFvZRZuitvia7WiOMZk5NAFKC--tAWQA"
-*/
+#include <BlynkSimpleWifi.h>
+#include <Blynk.h>
+#include <WiFiS3.h>
+#include <Servo.h>
+#include <SoftwareSerial.h>
+#include <TinyGPSPlus.h>
 
+#define M1F 6
+#define M1R 4
+#define M2F 5
+#define M2R 3
 
-#include <BlynkSimpleEsp32.h>
+#define BLYNK_PRINT Serial
+BlynkTimer timer; 
 
+// GPS
+const int RXPin = 8;
+const int TXPin = 7;
+const int GPSBaud = 9600;
+SoftwareSerial gpsSerial(RXPin, TXPin);
+TinyGPSPlus gps;
 
-#define RELAY_PIN 3
+float LONG = 0.0;
+float LAT = 0.0;
+float speed = 0.0;
+
+// SERVO
+Servo servo;
 
 struct WiFiCredential {
   const char* ssid;
   const char* password;
 };
 
-// Define an array of WiFi credentials
+// WiFi credentials
 const WiFiCredential wifiCredentials[] = {
-  {"MagNet", "123iot123"}  // Use the ssid and password variables here
+  {"MagNet", "123iot123"}  // Update these with your actual WiFi credentials
 };
 
-#include <WiFi.h>
-
-//------------------------------------ WIFI
-
 void connectToWiFi() {
-  int numNetworks = sizeof(wifiCredentials) / sizeof(wifiCredentials[0]);
-  for (int i = 0; i < numNetworks; i++) {
-    Serial.print("Connecting to ");
-    Serial.println(wifiCredentials[i].ssid);
-    WiFi.begin(wifiCredentials[i].ssid, wifiCredentials[i].password);
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 10) {
-      delay(1000);
-      Serial.print(".");
-      attempts++;
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nConnected to WiFi");
-      Serial.print("IP Address: ");
-      Serial.println(WiFi.localIP());
-      break;
-    } else {
-      Serial.println("\nConnection failed!");
+  Serial.print("Connecting to ");
+  Serial.println(wifiCredentials[0].ssid);
+  WiFi.begin(wifiCredentials[0].ssid, wifiCredentials[0].password);
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+    delay(1000);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nConnected to WiFi");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nConnection failed, check your credentials or reset the board.");
+  }
+}
+
+void readGPS() {
+  while (gpsSerial.available()) {
+    char c = gpsSerial.read();
+    if (gps.encode(c)) {
+      LAT = gps.location.lat();
+      LONG = gps.location.lng();
+      speed = gps.speed.knots();
+
+      Serial.print("Latitude: ");
+      Serial.println(LAT, 6);  // Print latitude met 6 decimalen
+      Serial.print("Longitude: ");
+      Serial.println(LONG, 6);  // Print longitude met 6 decimalen
+      Serial.print("Speed (knots): ");
+      Serial.println(speed, 2);  // Print speed met 2 decimalen
+
+      // Stuur GPS-data naar Blynk
+      Blynk.virtualWrite(V4, LAT);
+      Blynk.virtualWrite(V5, LONG);
+      Blynk.virtualWrite(V1, speed);
+
+      // | DEBUG |
+      Serial.print("Satellites: ");
+      Serial.println(gps.satellites.value());
     }
   }
 }
 
 void setup() {
-  Serial.begin(9600);
-  //connectToWiFi();
+  Serial.begin(115200);
+  Serial.println("Serial started at 115200");
+  gpsSerial.begin(GPSBaud);
+  Serial.println("GPS Serial started at 9600");
+  connectToWiFi();
   Blynk.begin(BLYNK_AUTH_TOKEN, wifiCredentials[0].ssid, wifiCredentials[0].password);
 
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  pinMode(M1F, OUTPUT);
+  pinMode(M2F, OUTPUT);
+  pinMode(M1R, OUTPUT);
+  pinMode(M2R, OUTPUT);
+  digitalWrite(M1F, LOW);
+  digitalWrite(M2F, LOW);
+  digitalWrite(M1R, LOW);
+  digitalWrite(M2R, LOW);
+
+  servo.attach(11);
 
   Blynk.virtualWrite(V2, 0);
+
+  // Setup een timer om elke 10 seconden de GPS-data te lezen
+  timer.setInterval(10000L, readGPS);
+
+  Serial.println("Setup completed");
 }
 
 void loop() {
-
   Blynk.run();
+  timer.run(); // Laat de timer draaien
 }
 
 BLYNK_WRITE(V0) {
-  int relayState = param.asInt(); // Get the state of the virtual pin
-  if (relayState == HIGH) {
-    // Turn on the relay when the button is pressed
-    digitalWrite(RELAY_PIN, HIGH);
-  } else {
-    // Turn off the relay when the button is released
-    digitalWrite(RELAY_PIN, LOW);
-  }
+  int relayState = param.asInt();
+  digitalWrite(M1F, relayState);
+  digitalWrite(M2F, relayState);
 }
 
-// Function to handle the slider value change event
 BLYNK_WRITE(V2) {
-  int sliderValue = param.asInt(); // Get the value from the slider
-  // Map the slider value (0-1023) to the range of the relay (0-1)
-  int relayState = map(sliderValue, 0, 1023, 0, 1);
-  // Update the relay state accordingly
-  digitalWrite(RELAY_PIN, relayState);
+  int sliderValue = param.asInt();  // Waarde ophalen van Blynk slider
+  int servoCommand = map(sliderValue, 0, 180, 0, 180);  // Waarde mappen naar servo bereik
+  servo.write(servoCommand);
+}
+
+BLYNK_WRITE(V3) {
+  int relayState = param.asInt();
+  digitalWrite(M1R, relayState);
+  digitalWrite(M2R, relayState);
 }
