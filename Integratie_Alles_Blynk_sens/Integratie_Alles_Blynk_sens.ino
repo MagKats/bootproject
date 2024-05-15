@@ -1,6 +1,6 @@
-#define BLYNK_TEMPLATE_ID "TMPL5C4B1dg3j"
-#define BLYNK_TEMPLATE_NAME "Boot Project Rev4"
-#define BLYNK_AUTH_TOKEN "5u0JzlNEczJ-npDnxfmGmSe15lzVdBPW"
+#define BLYNK_TEMPLATE_ID ""
+#define BLYNK_TEMPLATE_NAME ""
+#define BLYNK_AUTH_TOKEN ""
 
 #include <BlynkSimpleWifi.h>
 #include <Blynk.h>
