@@ -1,6 +1,6 @@
-#define BLYNK_TEMPLATE_ID "TMPL5aALXjp2f"
-#define BLYNK_TEMPLATE_NAME "SCHIP CONTROLE"
-#define BLYNK_AUTH_TOKEN "uO-RsP0GDFLPK8S9MKLGdS8HW1Nf4gO1"
+#define BLYNK_TEMPLATE_ID ""
+#define BLYNK_TEMPLATE_NAME ""
+#define BLYNK_AUTH_TOKEN ""
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
