@@ -7,12 +7,19 @@
 #include <WiFiS3.h>
 #include <Servo.h>
 #include <SoftwareSerial.h>
-#include <TinyGPSPlus.h>
+#include <TinyGPS++.h>
+#include "Arduino_LED_Matrix.h"
 
 #define M1F 6
 #define M1R 4
 #define M2F 5
 #define M2R 3
+
+// Buzzer
+/*const byte speakerPin=A5;
+unsigned long lastPeriodStart;
+const int onDuration=1000;
+const int periodDuration=6000;*/
 
 #define BLYNK_PRINT Serial
 BlynkTimer timer; 
@@ -28,8 +35,17 @@ float LONG = 0.0;
 float LAT = 0.0;
 float speed = 0.0;
 
+// Ultrasone sensor
+const int trigPin = 9;
+const int echoPin = 10;
+long duration;
+float distance;
+
 // SERVO
 Servo servo;
+
+// Matrix
+ArduinoLEDMatrix matrix;
 
 struct WiFiCredential {
   const char* ssid;
@@ -38,7 +54,7 @@ struct WiFiCredential {
 
 // WiFi credentials
 const WiFiCredential wifiCredentials[] = {
-  {"MagNet", "123iot123"}  // Update these with your actual WiFi credentials
+  {"", ""}  // Update these with your actual WiFi credentials
 };
 
 void connectToWiFi() {
@@ -57,6 +73,12 @@ void connectToWiFi() {
     Serial.println("\nConnected to WiFi");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
+    /*if (millis()-lastPeriodStart>=periodDuration)
+      {
+        lastPeriodStart+=periodDuration;
+        tone(speakerPin,960, onDuration); // play 550 Hz tone in background for 'onDuration'
+      }*/
+
   } else {
     Serial.println("\nConnection failed, check your credentials or reset the board.");
   }
@@ -68,7 +90,7 @@ void readGPS() {
     if (gps.encode(c)) {
       LAT = gps.location.lat();
       LONG = gps.location.lng();
-      speed = gps.speed.knots();
+      speed = gps.speed.kmph();
 
       Serial.print("Latitude: ");
       Serial.println(LAT, 6);  // Print latitude met 6 decimalen
@@ -89,6 +111,29 @@ void readGPS() {
   }
 }
 
+void readUltrasonicSensor() {
+  // Zorg ervoor dat de trigPin laag is
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // Zet de trigPin hoog gedurende 10 microseconden
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Lees de echoPin, bereken de reistijd en de afstand
+  duration = pulseIn(echoPin, HIGH);
+  //distance = duration * 0.034 / 2;
+  distance = duration * 0.1482 / 2;
+
+  // Print de afstand naar de seriële monitor
+  Serial.print("Distance: ");
+  Serial.println(distance);
+
+  // Stuur de afstand naar Blynk op V5 met 2 decimalen nauwkeurigheid
+  Blynk.virtualWrite(V5, String(distance, 2).toFloat());
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Serial started at 115200");
@@ -96,6 +141,7 @@ void setup() {
   Serial.println("GPS Serial started at 9600");
   connectToWiFi();
   Blynk.begin(BLYNK_AUTH_TOKEN, wifiCredentials[0].ssid, wifiCredentials[0].password);
+  matrix.begin();
 
   pinMode(M1F, OUTPUT);
   pinMode(M2F, OUTPUT);
@@ -106,12 +152,18 @@ void setup() {
   digitalWrite(M1R, LOW);
   digitalWrite(M2R, LOW);
 
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  pinMode(speakerPin, OUTPUT);
+
   servo.attach(11);
 
   Blynk.virtualWrite(V2, 0);
 
-  // Setup een timer om elke 10 seconden de GPS-data te lezen
+  // Setup timers om de GPS-data en de ultrasone sensor te lezen
   timer.setInterval(10000L, readGPS);
+  timer.setInterval(2000L, readUltrasonicSensor);  // Lees elke 2 seconden de ultrasone sensor
 
   Serial.println("Setup completed");
 }
