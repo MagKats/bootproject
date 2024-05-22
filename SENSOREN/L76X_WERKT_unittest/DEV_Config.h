@@ -15,8 +15,8 @@
 /**
  * GPIO config
 **/
-#define DEV_FORCE 4
-#define DEV_STANDBY 5
+#define DEV_FORCE 13
+#define DEV_STANDBY 12
 
 /**
  * GPIO read and write

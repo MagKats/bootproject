@@ -3,8 +3,8 @@
 #include "DEV_Config.h"
 #include "L76X.h"
 
-const int rxPin = 12;
-const int txPin = 14;
+const int rxPin = 7;
+const int txPin = 8;
 
 SoftwareSerial gpsSerial(rxPin, txPin);
 TinyGPSPlus gps;

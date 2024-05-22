@@ -1,30 +1,22 @@
-#define BLYNK_TEMPLATE_ID ""
-#define BLYNK_TEMPLATE_NAME ""
-#define BLYNK_AUTH_TOKEN ""
-
+#include "secret.h"
 #include <BlynkSimpleWifi.h>
 #include <Blynk.h>
 #include <WiFiS3.h>
 #include <Servo.h>
 #include <SoftwareSerial.h>
-#include <TinyGPS++.h>
-#include "Arduino_LED_Matrix.h"
+#include <TinyGPSPlus.h>
+#include <Wire.h>
 
 #define M1F 6
 #define M1R 4
 #define M2F 5
 #define M2R 3
 
-// Buzzer
-/*const byte speakerPin=A5;
-unsigned long lastPeriodStart;
-const int onDuration=1000;
-const int periodDuration=6000;*/
-
 #define BLYNK_PRINT Serial
 BlynkTimer timer; 
 
 // GPS
+#define PowerGPS 2
 const int RXPin = 8;
 const int TXPin = 7;
 const int GPSBaud = 9600;
@@ -35,27 +27,12 @@ float LONG = 0.0;
 float LAT = 0.0;
 float speed = 0.0;
 
-// Ultrasone sensor
-const int trigPin = 9;
-const int echoPin = 10;
-long duration;
+// TOF10120 sensor
+const int TOF_ADDRESS = 0x52;
 float distance;
 
 // SERVO
 Servo servo;
-
-// Matrix
-ArduinoLEDMatrix matrix;
-
-struct WiFiCredential {
-  const char* ssid;
-  const char* password;
-};
-
-// WiFi credentials
-const WiFiCredential wifiCredentials[] = {
-  {"", ""}  // Update these with your actual WiFi credentials
-};
 
 void connectToWiFi() {
   Serial.print("Connecting to ");
@@ -73,65 +50,59 @@ void connectToWiFi() {
     Serial.println("\nConnected to WiFi");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
-    /*if (millis()-lastPeriodStart>=periodDuration)
-      {
-        lastPeriodStart+=periodDuration;
-        tone(speakerPin,960, onDuration); // play 550 Hz tone in background for 'onDuration'
-      }*/
-
   } else {
     Serial.println("\nConnection failed, check your credentials or reset the board.");
   }
 }
 
 void readGPS() {
-  while (gpsSerial.available()) {
+  while (gpsSerial.available() > 0) {
     char c = gpsSerial.read();
-    if (gps.encode(c)) {
-      LAT = gps.location.lat();
-      LONG = gps.location.lng();
-      speed = gps.speed.kmph();
+    gps.encode(c);
+  }
 
-      Serial.print("Latitude: ");
-      Serial.println(LAT, 6);  // Print latitude met 6 decimalen
-      Serial.print("Longitude: ");
-      Serial.println(LONG, 6);  // Print longitude met 6 decimalen
-      Serial.print("Speed (knots): ");
-      Serial.println(speed, 2);  // Print speed met 2 decimalen
+  if (gps.location.isUpdated()) {
+    LAT = gps.location.lat();
+    LONG = gps.location.lng();
+    speed = gps.speed.knots();
 
-      // Stuur GPS-data naar Blynk
-      Blynk.virtualWrite(V4, LAT);
-      Blynk.virtualWrite(V5, LONG);
-      Blynk.virtualWrite(V1, speed);
+    Serial.print("Latitude: ");
+    Serial.println(LAT, 6);  // Print latitude with 6 decimals
+    Serial.print("Longitude: ");
+    Serial.println(LONG, 6);  // Print longitude with 6 decimals
+    Serial.print("Speed (knots): ");
+    Serial.println(speed, 2);  // Print speed with 2 decimals
 
-      // | DEBUG |
-      Serial.print("Satellites: ");
-      Serial.println(gps.satellites.value());
-    }
+    // Send GPS data to Blynk
+    Blynk.virtualWrite(V4, LAT, LONG);
+    Blynk.virtualWrite(V1, speed);
+
+    // Debugging
+    Serial.print("Satellites: ");
+    Serial.println(gps.satellites.value());
   }
 }
 
-void readUltrasonicSensor() {
-  // Zorg ervoor dat de trigPin laag is
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
+void readTOF() {
+  Wire.beginTransmission(TOF_ADDRESS);
+  Wire.write(0x00);  // Request the distance measurement
+  Wire.endTransmission();
 
-  // Zet de trigPin hoog gedurende 10 microseconden
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  Wire.requestFrom(TOF_ADDRESS, 2);  // Request 2 bytes from the sensor
+  if (Wire.available() == 2) {
+    uint16_t distanceRaw = Wire.read();  // Read the first byte
+    distanceRaw |= Wire.read() << 8;  // Read the second byte and combine
 
-  // Lees de echoPin, bereken de reistijd en de afstand
-  duration = pulseIn(echoPin, HIGH);
-  //distance = duration * 0.034 / 2;
-  distance = duration * 0.1482 / 2;
+    distance = distanceRaw / 10.0;  // Convert to cm and store in the float variable
 
-  // Print de afstand naar de seriële monitor
-  Serial.print("Distance: ");
-  Serial.println(distance);
+    Serial.print("Distance: ");
+    Serial.println(distance);
 
-  // Stuur de afstand naar Blynk op V5 met 2 decimalen nauwkeurigheid
-  Blynk.virtualWrite(V5, String(distance, 2).toFloat());
+    // Send distance data to Blynk
+    Blynk.virtualWrite(V5, distance);
+  } else {
+    Serial.println("Failed to read from TOF sensor");
+  }
 }
 
 void setup() {
@@ -141,7 +112,6 @@ void setup() {
   Serial.println("GPS Serial started at 9600");
   connectToWiFi();
   Blynk.begin(BLYNK_AUTH_TOKEN, wifiCredentials[0].ssid, wifiCredentials[0].password);
-  matrix.begin();
 
   pinMode(M1F, OUTPUT);
   pinMode(M2F, OUTPUT);
@@ -152,25 +122,23 @@ void setup() {
   digitalWrite(M1R, LOW);
   digitalWrite(M2R, LOW);
 
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-
-  pinMode(speakerPin, OUTPUT);
+  pinMode(PowerGPS, OUTPUT);
+  digitalWrite(PowerGPS, HIGH);
 
   servo.attach(11);
 
   Blynk.virtualWrite(V2, 0);
 
-  // Setup timers om de GPS-data en de ultrasone sensor te lezen
-  timer.setInterval(10000L, readGPS);
-  timer.setInterval(2000L, readUltrasonicSensor);  // Lees elke 2 seconden de ultrasone sensor
+  // Setup timers for GPS and ultrasonic sensor
+//  timer.setInterval(10000L, readGPS); // Read GPS every 10 seconds
+  timer.setInterval(3000L, readTOF); // Read ultrasonic sensor every 3 seconds
 
   Serial.println("Setup completed");
 }
 
 void loop() {
   Blynk.run();
-  timer.run(); // Laat de timer draaien
+  timer.run(); // Run the timer
 }
 
 BLYNK_WRITE(V0) {
@@ -180,8 +148,8 @@ BLYNK_WRITE(V0) {
 }
 
 BLYNK_WRITE(V2) {
-  int sliderValue = param.asInt();  // Waarde ophalen van Blynk slider
-  int servoCommand = map(sliderValue, 0, 180, 0, 180);  // Waarde mappen naar servo bereik
+  int sliderValue = param.asInt();  // Get value from Blynk slider
+  int servoCommand = map(sliderValue, 0, 180, 0, 180);  // Map value to servo range
   servo.write(servoCommand);
 }
 
