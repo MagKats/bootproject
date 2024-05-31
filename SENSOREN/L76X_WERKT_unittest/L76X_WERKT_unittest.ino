@@ -3,8 +3,8 @@
 #include "DEV_Config.h"
 #include "L76X.h"
 
-const int rxPin = 7;
-const int txPin = 8;
+const int rxPin = 0;
+const int txPin = 1;
 
 SoftwareSerial gpsSerial(rxPin, txPin);
 TinyGPSPlus gps;
@@ -13,6 +13,7 @@ void readGPS() {
     while (gpsSerial.available()) {
         char c = gpsSerial.read();
         gps.encode(c);
+        Serial.print(c);
     }
 }
 

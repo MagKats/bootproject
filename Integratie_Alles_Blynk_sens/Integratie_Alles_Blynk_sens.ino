@@ -7,18 +7,15 @@
 #include <TinyGPSPlus.h>
 #include <Wire.h>
 
+// Motor Pins
 #define M1F 6
 #define M1R 4
 #define M2F 5
 #define M2R 3
 
-#define BLYNK_PRINT Serial
-BlynkTimer timer; 
-
 // GPS
-#define PowerGPS 2
-const int RXPin = 8;
-const int TXPin = 7;
+const int RXPin = 1;
+const int TXPin = 0;
 const int GPSBaud = 9600;
 SoftwareSerial gpsSerial(RXPin, TXPin);
 TinyGPSPlus gps;
@@ -27,6 +24,10 @@ float LONG = 0.0;
 float LAT = 0.0;
 float speed = 0.0;
 
+// WiFi
+#define BLYNK_PRINT Serial
+BlynkTimer timer;
+
 // TOF10120 sensor
 const int TOF_ADDRESS = 0x52;
 float distance;
@@ -34,6 +35,10 @@ float distance;
 // SERVO
 Servo servo;
 
+int sensorCounter = 0;
+bool newGPSData = false;
+
+// Function to connect to WiFi
 void connectToWiFi() {
   Serial.print("Connecting to ");
   Serial.println(wifiCredentials[0].ssid);
@@ -55,38 +60,50 @@ void connectToWiFi() {
   }
 }
 
+// Function to read GPS data
 void readGPS() {
   while (gpsSerial.available() > 0) {
     char c = gpsSerial.read();
-    gps.encode(c);
+    if (gps.encode(c)) {
+      newGPSData = true;
+    }
   }
 
-  if (gps.location.isUpdated()) {
+  if (newGPSData && gps.location.isValid()) {
     LAT = gps.location.lat();
     LONG = gps.location.lng();
     speed = gps.speed.knots();
 
+    // Debug output
     Serial.print("Latitude: ");
-    Serial.println(LAT, 6);  // Print latitude with 6 decimals
-    Serial.print("Longitude: ");
-    Serial.println(LONG, 6);  // Print longitude with 6 decimals
-    Serial.print("Speed (knots): ");
-    Serial.println(speed, 2);  // Print speed with 2 decimals
+    Serial.print(LAT, 6);
+    Serial.print(", Longitude: ");
+    Serial.print(LONG, 6);
+    Serial.print(", Speed: ");
+    Serial.println(speed);
 
     // Send GPS data to Blynk
-    Blynk.virtualWrite(V4, LAT, LONG);
-    Blynk.virtualWrite(V1, speed);
+    Blynk.virtualWrite(V4, String(LAT, 6) + "," + String(LONG, 6));  // Send latitude and longitude together
+    Blynk.virtualWrite(V1, speed);  // Send speed
 
-    // Debugging
-    Serial.print("Satellites: ");
-    Serial.println(gps.satellites.value());
+    newGPSData = false;
+  } else {
+    Serial.println("Waiting for valid GPS signal...");
   }
 }
 
-void readTOF() {
+// Function to read TOF sensor data
+void readTOFSensor() {
   Wire.beginTransmission(TOF_ADDRESS);
   Wire.write(0x00);  // Request the distance measurement
-  Wire.endTransmission();
+  byte error = Wire.endTransmission();
+
+  if (error != 0) {
+    Serial.print("I2C Error: ");
+    Serial.println(error);
+    Serial.println("Failed to read from TOF sensor");
+    return;
+  }
 
   Wire.requestFrom(TOF_ADDRESS, 2);  // Request 2 bytes from the sensor
   if (Wire.available() == 2) {
@@ -103,6 +120,18 @@ void readTOF() {
   } else {
     Serial.println("Failed to read from TOF sensor");
   }
+}
+
+// Function to read sensors alternatively
+void readSensors() {
+  if (sensorCounter % 2 == 0) {
+    readGPS();
+  } else {
+    readTOFSensor();
+  }
+
+  // Increment the counter
+  sensorCounter++;
 }
 
 void setup() {
@@ -122,16 +151,14 @@ void setup() {
   digitalWrite(M1R, LOW);
   digitalWrite(M2R, LOW);
 
-  pinMode(PowerGPS, OUTPUT);
-  digitalWrite(PowerGPS, HIGH);
-
   servo.attach(11);
 
   Blynk.virtualWrite(V2, 0);
 
   // Setup timers for GPS and ultrasonic sensor
-//  timer.setInterval(10000L, readGPS); // Read GPS every 10 seconds
-  timer.setInterval(3000L, readTOF); // Read ultrasonic sensor every 3 seconds
+  timer.setInterval(2000L, readSensors); // Read sensors every 2 seconds
+
+  Wire.begin();  // Initialize I2C communication
 
   Serial.println("Setup completed");
 }
