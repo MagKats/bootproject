@@ -1,0 +1,158 @@
+from flask import Flask, request, jsonify
+
+import mariadb
+import json
+import sys
+import re
+
+
+app = Flask(__name__)
+
+
+
+# Database configuratie
+
+DATABASE_CONFIG = {
+
+    'host': 'localhost',
+
+    'user': 'magnusDBInsert',
+
+    'password': 'EncoraBootProject14?',
+
+    'database': 'boot_data'
+
+}
+
+
+@app.route('/')
+def index():
+        return 'Hello world'
+
+# Functie om gegevens in de database in te voeren
+
+# Set up the database connection
+
+def get_db_connection():
+    return mariadb.connect(**DATABASE_CONFIG)
+
+
+
+@app.route('/receive-data', methods=['POST'])
+
+def receive_data():
+
+    try:
+
+        # Get the raw data as text
+
+        raw_data = request.get_data(as_text=True)
+
+        print("Raw data received:", raw_data)  # Log the raw incoming data
+
+
+
+        # Extract the 'data' field as a string without parsing
+
+        data_prefix = '"data":"'
+
+        data_suffix = '"'
+
+        start_index = raw_data.find(data_prefix) + len(data_prefix)
+
+        end_index = raw_data.rfind(data_suffix, start_index)
+
+
+
+        if start_index == -1 or end_index == -1:
+
+            raise ValueError("Invalid format for 'data' field")
+
+
+
+        # Extract and correct the nested JSON string
+
+        nested_json_str = raw_data[start_index:end_index]
+
+        nested_json_str = nested_json_str.replace('\\"', '"')
+
+        print("Extracted nested JSON string:", nested_json_str)
+
+
+
+        # Correct the raw_data to have a valid JSON string
+
+        corrected_raw_data = raw_data[:start_index] + nested_json_str.replace('"', '\\"') + raw_data[end_index>
+
+        print("Corrected raw data:", corrected_raw_data)
+
+
+
+        # Parse the corrected raw data as JSON
+
+        data_json = json.loads(corrected_raw_data)
+
+        print("Parsed data:", data_json)
+
+
+
+        # Parse the nested JSON string
+
+        sensor_data = json.loads(data_json['data'])
+
+        print("Sensor data:", sensor_data)
+
+
+
+        # Now you can work with the sensor_data dictionary
+
+        latitude = sensor_data.get('latitude')
+
+        longitude = sensor_data.get('longtitude')  # Note the typo correction
+
+        speed = sensor_data.get('speed')
+
+        depth = sensor_data.get('depth')
+
+
+
+        # Get database connection
+
+        db = get_db_connection()
+
+        cursor = db.cursor()
+
+
+
+        # Insert data into the database
+
+        query = "INSERT INTO sensordata (depth, longtitude, latitude, speed) VALUES (%s, %s, %s, %s)"
+
+        values = (depth, longitude, latitude, speed)
+
+        cursor.execute(query, values)
+
+        db.commit()
+
+
+        cursor.close()
+
+        db.close()
+
+
+
+        return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+
+        print("Error processing request:", e)
+
+        return jsonify({"status": "failed", "message": str(e)}), 400
+
+
+if __name__ == '__main__':
+
+    app.run()
+
+
+

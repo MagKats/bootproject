@@ -1,0 +1,43 @@
+<VirtualHost *:80>
+    ServerName boaty-mcboatface.iot-kdg.be
+    ServerAlias www.boaty-mcboatface.iot-kdg.be
+
+    WSGIProcessGroup flaskapp
+    WSGIScriptAlias / /var/www/flaskapp/flaskapp.wsgi
+
+    <Directory /var/www/flaskapp>
+        Require all granted
+    </Directory>
+
+    Alias /static /var/www/flaskapp/static
+    <Directory /var/www/flaskapp/static>
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/flaskapp_error.log
+    CustomLog ${APACHE_LOG_DIR}/flaskapp_access.log combined
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName boaty-mcboatface.iot-kdg.be
+    ServerAlias www.boaty-mcboatface.iot-kdg.be
+
+    WSGIProcessGroup flaskapp
+    WSGIScriptAlias / /var/www/flaskapp/flaskapp.wsgi
+
+    <Directory /var/www/flaskapp>
+        Require all granted
+    </Directory>
+
+    Alias /static /var/www/flaskapp/static
+    <Directory /var/www/flaskapp/static>
+        Require all granted
+    </Directory>
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/boaty-mcboatface.iot-kdg.be/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/boaty-mcboatface.iot-kdg.be/privkey.pem
+
+    ErrorLog ${APACHE_LOG_DIR}/flaskapp_ssl_error.log
+    CustomLog ${APACHE_LOG_DIR}/flaskapp_ssl_access.log combined
+</VirtualHost>

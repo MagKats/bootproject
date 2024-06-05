@@ -31,7 +31,7 @@ BlynkTimer timer;
 // TOF10120 sensor
 const int TOF_ADDRESS = 0x52;
 float distance;
-
+float calibrationFactor = 0.4;
 // SERVO
 Servo servo;
 
@@ -110,7 +110,8 @@ void readTOFSensor() {
     uint16_t distanceRaw = Wire.read();  // Read the first byte
     distanceRaw |= Wire.read() << 8;  // Read the second byte and combine
 
-    distance = distanceRaw / 10.0;  // Convert to cm and store in the float variable
+    distance = (distanceRaw / 10.0) * calibrationFactor;  // Convert to cm and store in the float variable
+//    distance = (distanceRaw / 10.0) * 1.33; // underwater formula
 
     Serial.print("Distance: ");
     Serial.println(distance);
