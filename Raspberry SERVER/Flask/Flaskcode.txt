@@ -14,13 +14,13 @@ app = Flask(__name__)
 
 DATABASE_CONFIG = {
 
-    'host': 'localhost',
+    'host': '',
 
-    'user': 'magnusDBInsert',
+    'user': '',
 
-    'password': 'EncoraBootProject14?',
+    'password': '',
 
-    'database': 'boot_data'
+    'database':''
 
 }
 
