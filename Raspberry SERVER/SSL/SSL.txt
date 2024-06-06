@@ -2,6 +2,9 @@
     ServerName boaty-mcboatface.iot-kdg.be
     ServerAlias www.boaty-mcboatface.iot-kdg.be
 
+
+    Redirect permanent / https://boaty-mcboatface.iot-kdg.be/
+
     WSGIProcessGroup flaskapp
     WSGIScriptAlias / /var/www/flaskapp/flaskapp.wsgi
 
