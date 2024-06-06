@@ -34,6 +34,7 @@ def index():
 # Set up the database connection
 
 def get_db_connection():
+
     return mariadb.connect(**DATABASE_CONFIG)
 
 
